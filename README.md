@@ -1,5 +1,7 @@
 # My hobby electronics projects
 
+Blog: http://sergiols.blogspot.com
+
 ## Licence
 
 https://creativecommons.org/licenses/by-sa/3.0/
