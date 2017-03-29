@@ -1,0 +1,61 @@
+-- ------------------------------------------------------
+-- Title: USB LC Meter v1.0
+--
+-- Author: Felixls - 2011
+--
+-- Web: http://sergiols.blogspot.com
+--
+-- Compiler: 2.4o
+--
+-- Licence: Todos los contenidos por Felixls son licenciados por 
+--          Creative Commons Reconocimiento-Compartir bajo la misma licencia 3.0 Unported License.
+--          http://creativecommons.org/licenses/by-sa/3.0/
+--
+-- Description:
+-- Inductómetro/Capacímetro USB de alta precisión
+--
+-- Range:
+--
+--  Frecuencia  : 16000 khz - 555793 khz
+--  Inductancia : 	  1 nH  - 100 mH
+--  Capacitancia: 	  1 pF  -   1 uF  
+--
+--  Error       :    [0 hz  -  80 hz]
+--
+-- Sources:
+-- 			http://ironbark.bendigo.latrobe.edu.au/~rice/lc/
+-- 			http://www.todopic.com.ar/foros/index.php?topic=26840.0
+-- 			Biblioteca binario a bcd de Vasile Surducan.
+--			Biblioteca punto flotante 32bits de Microchip AN575 adaptada por Ziya ERDEMIR. 
+--
+-- Date: Julio 2011
+--
+-- ------------------------------------------------------
+--
+
+var word overflow
+
+procedure timer0_isr_initcounter() is
+
+	T0CON_TMR0ON = off   ; deshabilita el timer0
+	INTCON_TMR0IF = off
+	
+	T0CON_PSA  = 1   ; prescaler no asignado.
+	T0CON_T0PS = 0
+	T0CON_T08BIT = 0 ; timer0 configurado como contador de 16 bits
+	T0CON_T0SE = 0   ; incrementa en transición de bajo a alto
+	T0CON_T0CS = 1   ; lee transición del pin RA4 (T0CKI)
+
+	TMR0H = 0
+	TMR0L = 0
+   
+end procedure
+
+procedure ISR() is
+	pragma interrupt
+
+	if INTCON_TMR0IF == true then		-- overflow timer 0 (>65536)
+		overflow = overflow + 1
+		INTCON_TMR0IF = off
+	end if
+end procedure

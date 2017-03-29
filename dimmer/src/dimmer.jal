@@ -1,0 +1,125 @@
+-- ------------------------------------------------------
+-- Title: Dimmer muuuy básico
+--
+-- Author:  Felixls - 2011
+--
+-- Compiler: 2.4o
+--
+-- Description:
+-- Regulador de intensidad lumínica.
+--
+-- Importante: Este ejemplo es muuuy básico, está preparado para lamparas en redes electricas a 50Hz  
+--
+-- RB0	= Detección de cruce por cero
+-- RB1  = Disparo del triac
+-- RB4,5= Pulsadores para incremento/decremento del tiempo en estado apagado.
+--
+-- Sources:
+--
+-- Notes:
+--  - File creation date/time: Sat Jul 16 02:47:07 ART 2011.
+-- ------------------------------------------------------
+
+--;@main
+include 16f628a                    -- target PICmicro
+
+-- Resonator or crystal connected to pins OSC1 and OSC2.
+pragma target clock 4_000_000     -- oscillator frequency
+
+-- configuration memory settings (fuses)
+pragma target OSC	XT              -- HS crystal or resonator
+pragma target WDT	disabled        -- no watchdog
+pragma target LVP	disabled        -- no Low Voltage Programming
+pragma target MCLR	external        -- reset externally
+-- These configuration bit settings are only a selection, sufficient for
+-- this program, but other programs may need more or different settings.
+
+enable_digital_io()                -- make all pins digital I/O
+
+include delay
+
+pin_INT_direction	=  input			-- INT/RB0, Detección de cruce por cero
+
+alias	light		is pin_B1			-- Disparo del triac
+pin_B1_direction	= output
+
+alias	boton_mas		is pin_B4		-- Pulsador más luz 
+pin_B4_direction	= input
+
+alias	boton_menos		is pin_B5		-- Pulsador menos luz
+pin_B5_direction	= input
+
+var byte counter = 0
+var byte retardo = 85
+var byte tmr0load
+
+procedure isr() is
+	pragma interrupt
+	
+	if (INTCON_INTF) then
+		light = off
+		counter = 0
+		TMR0 = tmr0load
+		INTCON_T0IF = 0
+		INTCON_INTF = 0
+		INTCON_T0IE = on
+	end if
+	
+	if (INTCON_T0IF) then
+		TMR0 = tmr0load		
+		counter = counter + 1
+		if (counter >= retardo) then
+			light = on
+			INTCON_T0IE = off
+		end if
+		INTCON_T0IF = 0
+	end if
+end procedure
+
+INTCON_GIE = off
+
+INTCON_INTF = off
+INTCON_INTE = on
+
+
+-- Timer0 configurado a 0.1ms
+
+--//Timer0 Registers Prescaler= 1 - TMR0 Preset = 156 - Freq = 10000.00 Hz - Period = 0.000100 seconds
+T0CON_T0CS = 0;  // bit 5  TMR0 Clock Source Select bit...0 = Internal Clock (CLKO) 1 = Transition on T0CKI pin
+T0CON_T0SE = 0;  // bit 4 TMR0 Source Edge Select bit 0 = low/high 1 = high/low
+T0CON_PSA = 1;   // bit 3  Prescaler Assignment bit...0 = Prescaler is assigned to the Timer0
+T0CON_T0PS = 0;  // bits 2-0  PS2:PS0: Prescaler Rate Select bits
+tmr0load = 156
+
+INTCON_TMR0IF = 0
+INTCON_TMR0IE = off
+
+light = off
+
+INTCON_PEIE = on
+INTCON_GIE = on
+
+forever loop
+	if (boton_mas) then
+		delay_1ms(50)
+		while (boton_mas) loop end loop
+		
+		if (retardo > 2) then
+			retardo = retardo - 1
+		else
+			retardo = 1
+		end if						
+	end if
+	
+	if (boton_menos) then
+		delay_1ms(50)
+		while (boton_menos) loop end loop
+		
+		if (retardo<85) then
+			retardo = retardo + 1
+		else
+			retardo = 85
+		end if
+	end if
+	
+end loop

@@ -1,0 +1,232 @@
+-- ------------------------------------------------------
+-- Title: USB LC Meter v1.0
+--
+-- Author: Felixls - 2011
+--
+-- Web: http://sergiols.blogspot.com
+--
+-- Compiler: 2.4o
+--
+-- Licence: Todos los contenidos por Felixls son licenciados por 
+--          Creative Commons Reconocimiento-Compartir bajo la misma licencia 3.0 Unported License.
+--          http://creativecommons.org/licenses/by-sa/3.0/
+--
+-- Description:
+-- Inductómetro/Capacímetro USB de alta precisión
+--
+-- Range:
+--
+--  Frecuencia  : 16000 khz - 555793 khz
+--  Inductancia : 	  1 nH  - 100 mH
+--  Capacitancia: 	  1 pF  -   1 uF  
+--
+--  Error       :    [0 hz  -  80 hz]
+--
+-- Sources:
+-- 			http://ironbark.bendigo.latrobe.edu.au/~rice/lc/
+-- 			http://www.todopic.com.ar/foros/index.php?topic=26840.0
+-- 			Biblioteca binario a bcd de Vasile Surducan.
+--			Biblioteca punto flotante 32bits de Microchip AN575 adaptada por Ziya ERDEMIR. 
+--
+-- Date: Julio 2011
+--
+-- ------------------------------------------------------
+--
+
+
+-- PRELIMINARY 32 BIT FLOATING POINT ROUTINE VARIABLE DEFINITIONS
+-- first release.
+
+-- Original routines are from Microchip AN575
+-- Adapted to JAL by Ziya ERDEMIR 24.01.2003
+
+-- Modificado para JALv2 por Felixls
+-- http://sergiols.blogspot.com
+
+---- PROC
+--const FPA_24   = 4 -- 24 bit floating point add
+--const FPS_24   = 8 -- 24 bit floating point subtract
+--const FPM_24   = 12 -- 24 bit floating point multiply
+--const FPD_24   = 16 -- 24 bit floating point divide
+--const FLO_1624 = 20 -- 16 bit integer to 24 bit floating point conversion
+--const INT_2416 = 24 -- 24 bit floating point to 16 bit integer conversion
+--const FLO_2424 = 28 -- 24 bit integer to 24 bit floating point conversion
+--const INT_2424 = 32 -- 24 bit floating point to 24 bit integer conversion
+--const NRM_2424 = 36 -- 24 bit normalization of unnormalized 24 bit floating point numbers
+--const NRM_3224 = 40 -- 32 bit normalization of unnormalized 24 bit floating point numbers
+
+--const FPA_32   = 4 -- 32 bit floating point add
+--const FPS_32   = 8 -- 32 bit floating point subtract
+--const FPM_32   = 12 -- 32 bit floating point multiply
+--const FPD_32   = 16 -- 32 bit floating point divide
+--const FLO_2432 = 20 -- 24 bit integer to 32 bit floating point conversion
+--const NRM_3232 = 24 -- 32 bit normalization of unnormalized 32 bit floating point numbers
+--const INT_3224 = 28 -- 32 bit floating point to 24 bit integer conversion
+--const FLO_3232 = 32 -- 32 bit integer to 32 bit floating point conversion
+--const NRM_4032 = 36 -- 32 bit normalization of unnormalized 40 bit floating point numbers
+--const INT_3232 = 40 -- 32 bit floating point to 32 bit integer conversion
+
+const MSB                      = 7
+const LSB                      = 0
+const EXPBIAS                  = 127
+
+var volatile byte JMATH_BASE_ADDRESS[20]
+
+var volatile byte AARGB7 at JMATH_BASE_ADDRESS[0]   --   equ     0x0C
+var volatile byte AARGB6 at JMATH_BASE_ADDRESS[1]   --   equ     0x0D
+var volatile byte AARGB5 at JMATH_BASE_ADDRESS[2]   --   equ     0x0E
+var volatile byte AARGB4 at JMATH_BASE_ADDRESS[3]   --   equ     0x0F
+var volatile byte AARGB3 at JMATH_BASE_ADDRESS[4]   --   equ     0x10
+var volatile byte AARGB2 at JMATH_BASE_ADDRESS[5]   --   equ     0x11
+var volatile byte AARGB1 at JMATH_BASE_ADDRESS[6]   --   equ     0x12
+var volatile byte AARGB0 at JMATH_BASE_ADDRESS[7]   --   equ     0x13
+var volatile byte AEXP   at JMATH_BASE_ADDRESS[8]   --   equ     0x14    --  8 bit biased exponent for argument A
+var volatile byte AARG is AARGB0   --   equ     0x13    --  most significant byte of argument A
+
+var volatile byte EXP is AEXP      --   equ     0x14    --  8 bit biased exponent
+var volatile byte SIGN             --   equ     0x15    --  save location for sign in MSB
+
+var volatile byte ACCB7 is AARGB7  --   equ     0x0C
+var volatile byte ACCB6 is AARGB6  --   equ     0x0D
+var volatile byte ACCB5 is AARGB5  --   equ     0x0E
+var volatile byte ACCB4 is AARGB4  --   equ     0x0F
+var volatile byte ACCB3 is AARGB3  --   equ     0x10
+var volatile byte ACCB2 is AARGB2  --   equ     0x11
+var volatile byte ACCB1 is AARGB1  --   equ     0x12
+var volatile byte ACCB0 is AARGB0  --   equ     0x13
+var volatile byte ACC   is AARG    --   equ     0x13
+--
+var volatile byte BARGB3 at JMATH_BASE_ADDRESS[11]   --   equ     0x17
+var volatile byte BARGB2 at JMATH_BASE_ADDRESS[12]   --   equ     0x18
+var volatile byte BARGB1 at JMATH_BASE_ADDRESS[13]   --   equ     0x19
+var volatile byte BARGB0 at JMATH_BASE_ADDRESS[14]   --   equ     0x1A
+var volatile byte BEXP   at JMATH_BASE_ADDRESS[15]   --   equ     0x1B    --  8 bit biased exponent for argument B--
+var volatile byte BARG is BARGB0   --   equ     0x1A    --  most significant byte of argument B
+
+var volatile byte TEMPB3 at JMATH_BASE_ADDRESS[16]    --   equ     0x1C
+var volatile byte TEMPB2 at JMATH_BASE_ADDRESS[17]    --   equ     0x1D
+var volatile byte TEMPB1 at JMATH_BASE_ADDRESS[18]    --   equ     0x1E
+var volatile byte TEMPB0 at JMATH_BASE_ADDRESS[19]    --   equ     0x1F
+var volatile byte TEMP   at JMATH_BASE_ADDRESS[19]    --   equ     0x1F    --  temporary storage
+--
+--        FIXED POINT SPECIFIC DEFINITIONS
+--        remainder storage
+var volatile byte REMB3 is AARGB7  --   equ     0x0C
+var volatile byte REMB2 is AARGB6  --   equ     0x0D
+var volatile byte REMB1 is AARGB5  --   equ     0x0E
+var volatile byte REMB0 is AARGB4  --   equ     0x0F    --  most significant byte of remainder
+
+--var volatile byte LOOPCOUNT --   equ     0x20    --  loop counter
+--
+var volatile byte FPFLAGS   --    = 0x16 -- floating point library exception flags
+const             IOV  = 0  -- bit0 = integer overflow flag
+const             FOV  = 1  -- biprocedure calculart1 = floating point overflow flag
+const             FUN  = 2  -- bit2 = floating point underflow flag
+const             FDZ  = 3  -- bit3 = floating point divide by zero flag
+const             NAN  = 4  -- bit4 = not-a-number exception flag
+const             DOM  = 5  -- bit5 = domain error exception flag
+const             RND  = 6  -- bit6 = floating point rounding flag, 0 = truncation
+                                      -- 1 = unbiased rounding to nearest LSB
+
+const             SAT  = 7  -- bit7 = floating point saturate flag, 0 = terminate on
+                                      -- exception without saturation, 1 = terminate on
+                                      -- exception with saturation to appropriate value
+
+var volatile byte A3 at AARGB3   --   equ     0x10
+var volatile byte A2 at AARGB2   --   equ     0x11
+var volatile byte A1 at AARGB1   --   equ     0x12
+var volatile byte A0 at AARGB0   --   equ     0x13
+var volatile byte AE at AEXP     --   equ     0x14    --  8 bit biased exponent for argument A
+
+var volatile byte B3 at BARGB3  --   equ     0x17
+var volatile byte B2 at BARGB2  --   equ     0x18
+var volatile byte B1 at BARGB1  --   equ     0x19
+var volatile byte B0 at BARGB0  --   equ     0x1A
+var volatile byte BE at BEXP    --   equ     0x1B    --  8 bit biased exponent for argument B--
+
+--include jmath24fp
+--include jtaxxb24fp
+include jmath32fp
+
+; -------------------------------------------
+; for 24 bits
+;  Use:    FLO_1624
+;  Output: 24 bit floating point number in AEXP, AARGB0, AARGB1
+;  Result: AARG  <--  FLOAT( AARG )
+
+;  Use:    NRM_2424 
+;  Output: 24 bit normalized floating point number in AEXP, AARGB0, AARGB1
+;  Result: AARG  <--  NORMALIZE( AARG )
+
+;  Use:    FLO_2424
+;  Output: 24 bit floating point number in AEXP, AARGB0, AARGB1
+;  Result: AARG  <--  FLOAT( AARG )
+
+;  Use:    NRM_3224
+;  Output: 24 bit normalized floating point number in AEXP, AARGB0, AARGB1
+;  Result: AARG  <--  NORMALIZE( AARG )
+
+;  Use:    INT_2416
+;  Output: 16 bit 2's complement integer right justified in AARGB0, AARGB1
+;  Result: AARG  <--  INT( AARG )
+
+;  Use:    INT_2424
+;  Output: 24 bit 2's complement integer right justified in AARGB0, AARGB1, AARGB2
+;  Result: AARG  <--  INT( AARG )
+
+;  Use:    FPM_24
+;  Output: 24 bit floating point product in AEXP, AARGB0, AARGB1
+;  Result: AARG  <--  AARG * BARG
+
+;  Use:    FPD_24
+;  Output: 24 bit floating point quotient in AEXP, AARGB0, AARGB1
+;  Result: AARG  <--  AARG / BARG
+
+;  Use:    FPS_24
+;  Output: 24 bit floating point sum in AEXP, AARGB0, AARGB1
+;  Result: AARG  <--  AARG - BARG
+
+;  ----------------------------------------------------------------
+;  for 32 bits
+
+;  Use:    FLO_2432
+;  Output: 32 bit floating point number in AEXP, AARGB0, AARGB1, AARGB2
+;  Result: AARG  <--  FLOAT( AARG )
+
+;  Use:    NRM_3232
+;  Output: 32 bit normalized floating point number in AEXP, AARGB0, AARGB1, AARGB2
+;  Result: AARG  <--  NORMALIZE( AARG )
+
+;  Use:    FLO_3232
+;  Output: 32 bit floating point number in AEXP, AARGB0, AARGB1, AARGB2
+;  Result: AARG  <--  FLOAT( AARG )
+
+;  Use:    NRM_4032
+;  Output: 32 bit normalized floating point number in AEXP, AARGB0, AARGB1, AARGB2, AARGB3
+;  Result: AARG  <--  NORMALIZE( AARG )
+
+;  Use:    INT_3224
+;  Output: 24 bit 2's complement integer right justified in AARGB0, AARGB1, AARGB2
+;  Result: AARG  <--  INT( AARG )
+
+;  Use:    INT_3232
+;  Output: 32 bit 2's complement integer right justified in AARGB0, AARGB1, AARGB2, AARGB3
+;  Result: AARG  <--  INT( AARG )
+
+;  Use:    FPM_32
+;  Output: 32 bit floating point product in AEXP, AARGB0, AARGB1, AARGB2
+;  Result: AARG  <--  AARG * BARG
+
+;  Use:    FPD_32
+;  Output: 32 bit floating point quotient in AEXP, AARGB0, AARGB1, AARGB2
+;  Result: AARG  <--  AARG / BARG
+
+;  Use:    FPS_32
+;  Output: 32 bit floating point sum in AEXP, AARGB0, AARGB1, AARGB2
+;  Result: AARG  <--  AARG - BARG
+
+;  Use:    FPA_32
+;  Output: 32 bit floating point sum in AEXP, AARGB0, AARGB1, AARGB2
+;  Result: AARG  <--  AARG - BARG
+
+

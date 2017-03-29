@@ -1,0 +1,180 @@
+-- ------------------------------------------------------
+-- Title: USB LC Meter v1.0
+--
+-- Author: Felixls - 2011
+--
+-- Web: http://sergiols.blogspot.com
+--
+-- Compiler: 2.4o
+--
+-- Licence: Todos los contenidos por Felixls son licenciados por 
+--          Creative Commons Reconocimiento-Compartir bajo la misma licencia 3.0 Unported License.
+--          http://creativecommons.org/licenses/by-sa/3.0/
+--
+-- Description:
+-- Inductómetro/Capacímetro USB de alta precisión
+--
+-- Range:
+--
+--  Frecuencia  : 16000 khz - 555793 khz
+--  Inductancia : 	  1 nH  - 100 mH
+--  Capacitancia: 	  1 pF  -   1 uF  
+--
+--  Error       :    [0 hz  -  80 hz]
+--
+-- Sources:
+-- 			http://ironbark.bendigo.latrobe.edu.au/~rice/lc/
+-- 			http://www.todopic.com.ar/foros/index.php?topic=26840.0
+-- 			Biblioteca binario a bcd de Vasile Surducan.
+--			Biblioteca punto flotante 32bits de Microchip AN575 adaptada por Ziya ERDEMIR. 
+--
+-- Date: Julio 2011
+--
+-- ------------------------------------------------------
+--
+
+-- Author : Vasile Surducan (??)
+-- --------------------------------------------------
+-- bcd2 = most significant byte which contains 2 decimal numbers
+-- bcd1 = intermediate significant byte which contains 2 decimal numbers
+-- bcd0 = last significant byte which contains 2 decimal numbers
+-- bin1 = most significant byte which contains 1 hexadecimal number
+-- bin0 = least significant byte which contains 1 hexadecimal number
+-- --------------------------------------------------
+-- Bin2Bcd3(bcd2,bcd1,bcd0,bin1,bin0)
+-- converts hex numbers in bin1,bin0 to decimal numbers stored in bcd2,bcd1,bcd0
+-- maximum Hex number is:0xFFFF (65535)
+-- As an example for this maximum number procedure returns decimal numbers
+-- in varibles bcd2,bcd1,bcd0 as:
+-- bcd2=06 (0000_0110), bcd1=55 (0101_0101), bcd0=35 (0011_0101)
+-- --------------------------------------------------
+-- Bin3Bcd4(bcd3,bcd2,bcd1,bcd0,bin2,bin1,bin0)
+-- Derived from bin2bcd3 by Ziya Erdemir 04.01.2003
+-- converts hex numbers in bin2,bin1,bin0 to decimal numbers stored in bcd3,
+-- bcd2,bcd1 and bcd0
+-- maximum Hex number is:0xFFFFFF (16777215)
+-- bcd3 = most significant byte which contains 2 decimal numbers
+-- bcd2 = upper intermediate significant byte which contains 2 decimal numbers
+-- bcd1 = intermediate significant byte which contains 2 decimal numbers
+-- bcd0 = last significant byte which contains 2 decimal numbers
+-- bin2 = most significant byte which contains 1 hexadecimal number
+-- bin1 = intermediate significant byte which contains 1 hexadecimal number
+-- bin0 = least significant byte which contains 1 hexadecimal number
+-- --------------------------------------------------
+-- Bcd3Bin2(bcd2,bcd1,bcd0,bin1,bin0)
+-- Derived from bin2bcd3 by Ziya Erdemir 04.01.2003
+-- converts decimal numbers stored in bcd2,bcd1 and bcd0 to hex numbers
+-- bin1,bin0
+-- maximum decimal number must be 65535
+-- --------------------------------------------------
+-- Bcd4Bin3(bcd3,bcd2,bcd1,bcd0,bin2,bin1,bin0)
+-- Derived from bin3bcd4 by Ziya Erdemir 04.01.2003
+-- converts decimal numbers stored in bcd3,bcd2,bcd1 and bcd0 to hex numbers
+-- bin2,bin1,bin0
+-- maximum decimal number must be 16777215
+-- --------------------------------------------------
+
+Procedure AdjBcd(Byte in out digit) is
+Var byte temp 
+var bit hc at temp : 3 
+var bit fc at temp : 7 
+	  temp = digit + 3
+	  if hc then digit = temp end if
+	  temp = digit + 0x30
+	  if fc then digit = temp end if
+End procedure
+
+procedure bin2bcd3 (byte out bcd2,byte out bcd1,byte out bcd0,
+                    Byte in bin1 ,Byte in bin0)  is
+	bcd2 = 0
+	bcd1 = 0
+	bcd0 = 0
+    for 16 loop
+      AdjBcd(bcd0)		 	  
+      AdjBcd(bcd1)		  
+      AdjBcd(bcd2)
+	  Assembler
+	    rlf bin0,f
+	    rlf bin1,f
+	    rlf bcd0,f
+	    rlf bcd1,f
+	    rlf bcd2,f
+    end Assembler
+    end loop
+end procedure
+
+procedure bin3bcd4 (byte out bcd3, byte out bcd2,byte out bcd1,
+                    byte out bcd0, byte in bin2, byte in bin1,
+                    byte in bin0) is
+	bcd3 = 0
+	bcd2 = 0
+	bcd1 = 0
+	bcd0 = 0
+    for 24 loop
+      AdjBcd(bcd0)
+      AdjBcd(bcd1)
+      AdjBcd(bcd2)
+      AdjBcd(bcd3)
+	  Assembler
+	    rlf bin0,f
+	    rlf bin1,f
+	    rlf bin2,f
+	    rlf bcd0,f
+	    rlf bcd1,f
+	    rlf bcd2,f
+	    rlf bcd3,f
+    End Assembler
+    End loop
+End procedure
+
+procedure dAdjBcd(Byte in out digit) is
+var byte temp
+var bit hc at digit : 3
+var bit fc at digit : 7
+	  temp = digit - 3
+	  if hc then digit = temp end if
+	  temp = digit - 0x30
+	  if fc then digit = temp end if
+end procedure
+
+procedure bcd3bin2 (byte in bcd2,byte in bcd1,byte in bcd0,
+                    byte out bin1, byte out bin0)  is
+	bin1 = 0
+	bin0 = 0
+    for 16 loop			   -- all (16) bits of bin0..bin2
+	  Assembler
+	    rrf bcd2,f
+	    rrf bcd1,f
+	    rrf bcd0,f
+	    rrf bin1,f
+	    rrf bin0,f
+    End Assembler
+      dAdjBcd(bcd0)
+      dAdjBcd(bcd1)
+      dAdjBcd(bcd2)
+    end loop
+end procedure
+
+procedure bcd4bin3 (byte in bcd3, byte in bcd2, byte in bcd1,
+                    byte in bcd0, byte out bin2, byte out bin1,
+                    byte out bin0)  is
+	bin2 = 0
+	bin1 = 0
+	bin0 = 0
+    for 24 loop
+	  Assembler
+	    rrf bcd3,f
+	    rrf bcd2,f
+	    rrf bcd1,f
+	    rrf bcd0,f
+	    rrf bin2,f
+	    rrf bin1,f
+	    rrf bin0,f
+    End Assembler
+      dAdjBcd(bcd0)
+      dAdjBcd(bcd1)
+      dAdjBcd(bcd2)
+      dAdjBcd(bcd3)
+    end loop
+end procedure
+

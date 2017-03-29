@@ -1,0 +1,395 @@
+-- ------------------------------------------------------
+-- Title: USB LC Meter v1.0
+--
+-- Author: Felixls - 2011
+--
+-- Web: http://sergiols.blogspot.com
+--
+-- Compiler: 2.4o
+--
+-- Licence: Todos los contenidos por Felixls son licenciados por 
+--          Creative Commons Reconocimiento-Compartir bajo la misma licencia 3.0 Unported License.
+--          http://creativecommons.org/licenses/by-sa/3.0/
+--
+-- Description:
+-- Inductómetro/Capacímetro USB de alta precisión
+--
+-- Range:
+--
+--  Frecuencia  : 16000 hz - 555793 hz
+--  Inductancia : 	  1 nH  - 100 mH
+--  Capacitancia: 	  1 pF  -   1 uF  
+--
+--  Error       :    [0 hz  -  80 hz]
+--
+-- Sources:
+-- 			http://ironbark.bendigo.latrobe.edu.au/~rice/lc/
+-- 			http://www.todopic.com.ar/foros/index.php?topic=26840.0
+-- 			Biblioteca binario a bcd de Vasile Surducan.
+--			Biblioteca punto flotante 32bits de Microchip AN575 adaptada por Ziya ERDEMIR. 
+--
+-- Date: Julio 2011
+--
+-- ------------------------------------------------------
+--
+
+;@jallib section chipdef
+--;@main
+include 18f2550                    -- target PICmicro
+
+pragma target clock 20_000_000     -- oscillator frequency
+
+pragma fuses no
+pragma bootloader loader18
+
+-- include libraries
+include delay
+
+include usb_defs
+const byte USB_TRANSCEIVER_OPTION = USB_PULLUP_ENABLE | USB_INTERNAL_TRANSCEIVER
+
+include usb_serial
+include print
+include pic_data_eeprom
+include bin_bcd
+include jmath_init
+
+;@file:lcmeter/lcmeter.sch
+;@file:lcmeter/lcmeter.brd
+;@file:lcmeter/lcmeter-esq.pdf
+;@file:lcmeter/lcmeter-pcb.pdf
+
+-- RA0, RA1 entradas/salidas digitales o analógicas
+-- RB0 entrada, podría usarse como interruptor externo (ejemplo: reed switch para cuenta vueltas)
+-- RC6, RC7 entradas/salidas digitales ( se podría usar como rs232 por hardware o i2c por software)
+-- RC1 entrada/salida (podría ser señal PWM)
+
+alias pulnegro    			is pin_b1
+alias pulnegro_direction	is pin_b1_direction
+alias pulrojo				is pin_b0
+alias pulrojo_direction		is pin_b0_direction
+
+alias medicion				is pin_T0CKI
+alias medicion_direction	is pin_T0CKI_direction
+
+alias led1					is pin_b6
+alias led1_direction		is pin_b6_direction
+alias led2					is pin_b7
+alias led2_direction		is pin_b7_direction
+
+alias rele					is pin_b4
+alias rele_direction		is pin_b4_direction
+
+-- constants
+const  byte str_welcome[] = "USB LC Meter - Felixls 2011"
+
+-- set all IO as digital
+enable_digital_io()
+
+-- setup the USB serial library
+usb_serial_init()
+
+-- variables
+const MODO_CONDENSADOR		= 0
+const MODO_INDUCTOR			= 1
+const MODO_CALIBRACION		= 2
+
+-- offset de valores dentro de la eeprom interna
+const EEPROM_ADDR_CONFIG	= 0
+const EEPROM_ADDR_LAJUSTADA = 1
+const EEPROM_ADDR_CAJUSTADO = 5
+
+var byte modo = MODO_CONDENSADOR
+
+-- setup the timer0_isr_counter library
+include timer0_isr_counter
+
+-- setup the timer1_isr_interval library
+var bit		timeflag
+var dword	medida
+include	timer1_isr_interval
+
+var dword	frecuencia
+var byte	valuescale[2]
+
+include calculos
+
+--===========================================================================
+-- código principal
+--===========================================================================
+
+pulrojo_direction = input
+pulnegro_direction = input
+
+led1_direction = output
+led2_direction = output
+rele_direction = output
+
+led1 = on
+led2 = off
+rele = off
+
+-- Si el medido ya fue calibrado lee los valores de la eeprom interna, 
+-- de lo contrario inicializa los valores estándar.
+if data_eeprom(EEPROM_ADDR_CONFIG) != 1 then
+    data_eeprom_write(EEPROM_ADDR_CONFIG, 1)
+    
+    data_eeprom_write(EEPROM_ADDR_LAJUSTADA, LE)
+    data_eeprom_write(EEPROM_ADDR_LAJUSTADA+1, L0)
+    data_eeprom_write(EEPROM_ADDR_LAJUSTADA+2, L1)
+    data_eeprom_write(EEPROM_ADDR_LAJUSTADA+3, L2)
+    
+    data_eeprom_write(EEPROM_ADDR_CAJUSTADO, CE)
+    data_eeprom_write(EEPROM_ADDR_CAJUSTADO+1, C0)
+    data_eeprom_write(EEPROM_ADDR_CAJUSTADO+2, C1)
+    data_eeprom_write(EEPROM_ADDR_CAJUSTADO+3, C2)    
+else
+    LE = data_eeprom(EEPROM_ADDR_LAJUSTADA)
+    L0 = data_eeprom(EEPROM_ADDR_LAJUSTADA+1)
+    L1 = data_eeprom(EEPROM_ADDR_LAJUSTADA+2)
+    L2 = data_eeprom(EEPROM_ADDR_LAJUSTADA+3)
+    
+    CE = data_eeprom(EEPROM_ADDR_CAJUSTADO)
+    C0 = data_eeprom(EEPROM_ADDR_CAJUSTADO+1)
+    C1 = data_eeprom(EEPROM_ADDR_CAJUSTADO+2)
+    C2 = data_eeprom(EEPROM_ADDR_CAJUSTADO+3)    
+end if
+
+while (!usb_is_configured()) loop
+	usb_serial_flush()
+end loop
+
+led2 = on	delay_1ms(40)
+led2 = off	delay_1ms(40)
+led2 = on	delay_1ms(40)
+led2 = off	
+
+var bit		has_shown_welcome_msg = true
+var byte	ch
+const 		error_calibracion_admisible	= 5
+var dword	erroradmisible
+var dword	frecMax
+var dword	frecMin
+var dword	frecOptima
+var dword	mediciones					= 0
+var byte	estado						= 0
+var byte	intentos					= 0
+const		NumMuestras					= 5
+var dword	frec[NumMuestras]
+var byte	i
+var byte	strcalib[] = "Calibrando:"
+var byte	strleyendo[] = "Leyendo:"
+var byte	strcancelado[] = "Cancelado."
+var dword	errorlectura
+
+--
+-- Envía el valor de Cx/Lx
+--
+procedure enviarResultado() is
+	pragma inline
+	
+	usb_serial_data = " "	
+	usb_serial_data = "F"
+	usb_serial_data = " "
+	usb_serial_data = "="
+	usb_serial_data = " "
+	print_dword_dec(usb_serial_data, frecuencia)
+	usb_serial_data = "H"
+	usb_serial_data = "z"
+	usb_serial_data = "\t"
+	
+	usb_serial_flush()
+
+	if modo == MODO_INDUCTOR then
+	    usb_serial_data = "L"
+	else
+	    usb_serial_data = "C"
+	end if
+	usb_serial_data = "x"
+	usb_serial_data = " "
+	usb_serial_data = "="
+	usb_serial_data = " "
+	
+	if (frecuencia < 5 & modo == MODO_INDUCTOR) then
+	    usb_serial_data = "I"
+	    usb_serial_data = "n"
+	    usb_serial_data = "f"
+	    usb_serial_data = "i"
+	    usb_serial_data = "n"
+	    usb_serial_data = "i"
+	    usb_serial_data = "t"
+	    usb_serial_data = "a"
+	else
+	    enviar_medicion()
+	    
+	    -- envía la escala del valor (pF, nF, uF) o (nH, uH, mH)
+	    usb_serial_data = valuescale[0]
+	    usb_serial_data = valuescale[1]
+	end if
+
+end procedure
+
+--
+-- Reinicia la máquina de estado
+-- y valores de variables contadoras/sumadoras
+--
+procedure resetvars() is
+	pragma inline
+	estado		= 0              
+	mediciones	= 0
+	intentos	= 0
+end procedure
+
+-- Bucle principal
+forever loop
+
+	-- mantiene la conección usb viva    
+	usb_serial_flush()
+  
+    -- check if USB device has been configured by the HOST
+	if ( usb_cdc_line_status() !=  0x00 )  then
+		if !has_shown_welcome_msg then
+			has_shown_welcome_msg = true
+			print_string( usb_serial_data, str_welcome )
+			print_crlf(usb_serial_data)		            
+    	end if	
+	else
+		has_shown_welcome_msg = false
+	end if
+
+	-- Se pulsó botón modo
+    if pulnegro == low then
+        delay_100ms(2)
+        while (pulnegro == low) loop 
+            delay_1ms(50)
+        end loop
+
+		resetvars()
+		
+        led2 = !led2
+        rele = !rele
+        if modo == MODO_INDUCTOR then
+            modo = MODO_CONDENSADOR
+        else
+            modo = MODO_INDUCTOR
+        end if
+    end if
+    
+    -- Se pulsó botón calibrar
+    if pulrojo == low then
+        delay_100ms(2)
+        while (pulrojo == low) loop 
+            delay_1ms(50)
+        end loop
+        
+		resetvars()
+		estado = 3
+		print_string(usb_serial_data, strcalib)
+    end if
+
+	if (usb_is_configured()) then
+		
+		-- 1= estado lectura
+		-- 3= proceso de calibración
+		if (estado == 1) | (estado == 3) then
+		
+			delay_1ms(250)    -- retardo, importante para estabilización de lecturas
+			
+			medirfrecuencia()
+			
+			-- Realiza n muestreos para determinar el error de medición (hz) de frecuencia. 
+			frec[4] = frec[3]
+			frec[3] = frec[2]
+			frec[2] = frec[1]
+			frec[1] = frec[0]
+			frec[0] = frecuencia
+			mediciones = mediciones + 1
+
+			if (mediciones == NumMuestras) then
+				mediciones = 0
+				intentos = intentos + 1
+				
+				frecMin = frec[0]
+				frecMax = frec[0]
+				
+				i = 0
+				for NumMuestras using i loop
+					if (frec[i] > frecMax) then frecMax = frec[i] end if
+					if (frec[i] < frecMin) then frecMin = frec[i] end if
+				end loop
+
+				-- La frecuencia óptima puede calcularse mediante algún algoritmo
+				-- elijo para esta aplicación usar el valor mínimo.
+				frecOptima = frecMin
+				errorlectura = (frecMax - frecMin)/dword(2)
+				erroradmisible = dword(80)
+
+				-- en calibración el error admisible debe estar por debajo de los 5hz
+				if (intentos > 10) | ((estado == 3) & (errorlectura <= error_calibracion_admisible)) then
+					frecuencia = frecOptima
+					estado = estado + 1
+				else									
+					if (estado == 1) & (errorlectura <= erroradmisible) then
+						frecuencia = frecOptima
+						estado = estado + 1
+					end if
+				end if
+			end if
+		end if
+		
+		-- 2= estado envío de valor de componente
+		-- 4= ok del resultado de calibración
+		if (estado == 2) | (estado == 4) then
+			if (estado == 4) then
+				calibrar()
+				usb_serial_data = " "
+				usb_serial_data = "O"
+				usb_serial_data = "K"
+				usb_serial_data = "."
+				print_crlf(usb_serial_data)
+			else
+				usb_serial_flush()
+				enviarResultado()
+				usb_serial_flush()
+				
+				usb_serial_data = "\t"
+				usb_serial_data = "["
+				usb_serial_data = "+"
+				usb_serial_data = "/"
+				usb_serial_data = "-"
+				print_dword_dec(usb_serial_data, errorlectura)
+				usb_serial_data = "H"
+				usb_serial_data = "z"
+				usb_serial_data = "]"
+								
+				print_crlf(usb_serial_data)	        	
+				usb_serial_flush()
+			end if
+			
+			-- reinicia la máquina de estado
+			resetvars()
+		end if
+	
+		-- check for input character
+		if usb_serial_read( ch ) then
+	        if ch == "r" then							-- pulsando r se puede leer el valor de Lx o Cx
+				resetvars()
+				estado = 1
+				print_string(usb_serial_data, strleyendo)
+				
+	        elsif ch == "x" then						-- pulsando x se puede cancelar el comando actual
+				resetvars()
+				print_crlf(usb_serial_data)
+				print_string(usb_serial_data, strcancelado)
+				print_crlf(usb_serial_data)
+				
+	        elsif ch=="c" then							-- pulsando c se puede calibrar 
+				resetvars()
+				estado = 3
+				print_string(usb_serial_data, strcalib)
+	        end if
+		end if
+	end if
+	
+end loop
+

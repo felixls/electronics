@@ -1,0 +1,37 @@
+Part     Value                          Package      Library               Position (mm)         Orientation
+
+C1       100nf                          C025-030X050 rcl                   (40.64 43.18)         R0
+C2       47uf 25v                       E2-5         rcl                   (13.97 34.29)         R180
+C3       100nf                          C025-030X050 rcl                   (57.15 35.56)         R180
+C4       47uf 25v                       E2-5         rcl                   (52.07 24.13)         R270
+C5       10uf 50v                       E2-5         rcl                   (57.15 40.64)         R0
+C8       15pf                           C025-030X050 rcl                   (38.1 19.05)          R180
+C9       15pf                           C025-030X050 rcl                   (43.18 19.05)         R180
+D1       1N4148                         DO35-10      diode                 (10.16 39.37)         R0
+D2       1N4148                         DO35-10      diode                 (20.32 8.89)          R0
+IC1      PIC18F2550_28DIP               DIL28-3      microchip             (35.56 34.29)         R0
+L1       680uH                          0207/10      rcl                   (20.32 11.43)         R0
+LED1     Red                            LED5MM       led                   (55.88 17.78)         R270
+LED2     Green                          LED5MM       led                   (55.88 11.43)         R90
+Q1       BC548                          TO92-EBC     transistor-npn        (38.1 11.43)          R0
+Q2       20MHZ                          HC49/S       crystal               (40.64 24.13)         R0
+Q3       BC548                          TO92-EBC     transistor-npn        (45.72 8.89)          R180
+Q4       BC548                          TO92-EBC     transistor-npn        (30.48 11.43)         R0
+Q5       BC557                          TO92-EBC     transistor-pnp        (31.75 5.08)          R0
+R1       33                             0207/10      resistor              (20.32 19.05)         R0
+R2       33                             0207/10      resistor              (20.32 21.59)         R0
+R3       33                             0207/10      resistor              (20.32 16.51)         R180
+R4       4k7                            0207/10      resistor              (20.32 24.13)         R180
+R5       470                            0207/10      resistor              (60.96 13.97)         R270
+R6       470                            0207/10      resistor              (50.8 15.24)          R90
+R7       1k                             0207/10      resistor              (40.64 15.24)         R180
+R8       4k7                            0207/10      resistor              (20.32 26.67)         R180
+R9       2k7                            0207/10      resistor              (30.48 20.32)         R90
+R10      100k                           0207/10      resistor              (44.45 3.81)          R180
+R11      10k                            0207/10      resistor              (44.45 6.35)          R180
+R12      100                            0207/10      resistor              (20.32 6.35)          R180
+R13      10k                            0207/10      resistor              (20.32 13.97)         R0
+R14      10k                            0207/10      resistor              (33.02 20.32)         R90
+S3       9077-2                         9077-2       switch-misc           (22.86 45.72)         R0
+SV3      ISCP                           ML10         con-harting-ml        (5.08 25.4)           R90
+X3       MINI-USB_SHIELD4P-85-32004-00X 85-32004-00X con-cypressindustries (64.77 26.67)         R180

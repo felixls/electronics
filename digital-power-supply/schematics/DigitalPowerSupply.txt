@@ -1,0 +1,75 @@
+Partlist
+
+Part              Value          Device          Package      Library             Sheet
+
+12VAC_500MA_INPUT                AK300/2         AK300/2      con-ptr500          1
+24AC_4A_INPUT                    AK300/2         AK300/2      con-ptr500          1
+B1                               KBL             KBL          rectifier           1
+B2                               KBL             KBL          rectifier           1
+C1                1000uf 50v     CPOL-EUE5-13    E5-13        resistor            1
+C2                1000uf 50v     CPOL-EUE5-13    E5-13        resistor            1
+C3                470uf 35v      CPOL-EUE3.5-10  E3,5-10      resistor            1
+C4                470uf 35v      CPOL-EUE3.5-10  E3,5-10      resistor            1
+C6                10n            C-EU025-030X050 C025-030X050 resistor            1
+C7                470uf 35v      CPOL-EUE3.5-10  E3,5-10      resistor            1
+C8                100n           C-EU025-030X050 C025-030X050 resistor            1
+C9                470uf 35v      CPOL-EUE3.5-10  E3,5-10      resistor            1
+C10               100n           C-EU025-030X050 C025-030X050 resistor            1
+C11               1n             C-EU025-030X050 C025-030X050 resistor            1
+C12               100n           C-EU025-030X050 C025-030X050 resistor            1
+C14               10n            C-EU025-030X050 C025-030X050 resistor            1
+C15               4.7u 63v       CPOL-EUE2-5     E2-5         resistor            1
+C16               100n           C-EU025-030X050 C025-030X050 resistor            1
+D1                1N4148         1N4148          DO35-10      diode               1
+D2                1N4007         1N4004          DO41-10      diode               1
+D3                1N4148         1N4148          DO35-10      diode               1
+D4                1N4148         1N4148          DO35-10      diode               1
+D5                1N4148         1N4148          DO35-10      diode               1
+D9                1N5408         1N5400          DO201-15     diode               1
+FAN                              AK300/2         AK300/2      con-ptr500          1
+IC1               LM324N         LM324N          DIL14        linear              1
+IC2               7805T          7805T           TO220H       linear              1
+Q1                TIP142         TIP142          SOT93        transistor-power    1
+Q2                TIP142         TIP142          SOT93        transistor-power    1
+Q3                TIP142         TIP142          SOT93        transistor-power    1
+Q4                BC557          BC557           TO92         transistor-pnp      1
+Q5                BC548          BC548           TO92-EBC     transistor-npn      1
+R1                12k 1w         R-EU_0207/10    0207/10      resistor            1
+R2                0.51 1w        R-EU_0207/12    0207/12      resistor            1
+R3                0.51 1w        R-EU_0207/12    0207/12      resistor            1
+R4                0.51 1w        R-EU_0207/12    0207/12      resistor            1
+R5                100k           R-EU_0207/10    0207/10      resistor            1
+R6                10k            R-EU_0207/10    0207/10      resistor            1
+R7                10k            R-EU_0207/10    0207/10      resistor            1
+R8                1ohm 1w        R-EU_0207/12    0207/12      resistor            1
+R9                10k            R-EU_0207/10    0207/10      resistor            1
+R10               10k            R-EU_0207/10    0207/10      resistor            1
+R11               10k            R-EU_0207/10    0207/10      resistor            1
+R12               47k            R-EU_0207/10    0207/10      resistor            1
+R13               1k             R-EU_0207/10    0207/10      resistor            1
+R14               39k            R-EU_0207/10    0207/10      resistor            1
+R15               1k 1/2w        R-EU_0207/12    0207/12      resistor            1
+R16               47k            R-EU_0207/10    0207/10      resistor            1
+R17               10k            R-EU_0207/10    0207/10      resistor            1
+R18               10k            R-EU_0207/10    0207/10      resistor            1
+R19               39k            R-EU_0207/10    0207/10      resistor            1
+R20               1k             R-EU_0207/10    0207/10      resistor            1
+R21               8k2            R-EU_0207/10    0207/10      resistor            1
+R22               1k             R-EU_0207/12    0207/12      resistor            1
+R23               1k             R-EU_0207/10    0207/10      resistor            1
+R24               18k            R-EU_0207/10    0207/10      resistor            1
+R25               1k             R-EU_0207/10    0207/10      resistor            1
+R26               1ohm 1w        R-EU_0207/12    0207/12      resistor            1
+R27               1ohm 1w        R-EU_0207/12    0207/12      resistor            1
+R28               1ohm 1w        R-EU_0207/12    0207/12      resistor            1
+R29               1ohm 1w        R-EU_0207/12    0207/12      resistor            1
+R30               1ohm 1w        R-EU_0207/12    0207/12      resistor            1
+R31               1ohm 1w        R-EU_0207/12    0207/12      resistor            1
+R32               1ohm 1w        R-EU_0207/12    0207/12      resistor            1
+R33               1ohm 1w        R-EU_0207/12    0207/12      resistor            1
+R34               1ohm 1w        R-EU_0207/12    0207/12      resistor            1
+SALIDA                           AK300/2         AK300/2      con-ptr500          1
+SV2                              FE07-1          FE07         con-lsta            1
+T1                BC547          BC547           TO92         transistor-neu-to92 1
+T2                BC547          BC547           TO92         transistor-neu-to92 1
+T3                BC547          BC547           TO92         transistor-neu-to92 1

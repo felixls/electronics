@@ -1,0 +1,431 @@
+-- ------------------------------------------------------
+-- Title: USB LC Meter v1.0
+--
+-- Author: Felixls - 2011
+--
+-- Web: http://sergiols.blogspot.com
+--
+-- Compiler: 2.4o
+--
+-- Licence: Todos los contenidos por Felixls son licenciados por 
+--          Creative Commons Reconocimiento-Compartir bajo la misma licencia 3.0 Unported License.
+--          http://creativecommons.org/licenses/by-sa/3.0/
+--
+-- Description:
+-- Inductómetro/Capacímetro USB de alta precisión
+--
+-- Range:
+--
+--  Frecuencia  : 16000 khz - 555793 khz
+--  Inductancia : 	  1 nH  - 100 mH
+--  Capacitancia: 	  1 pF  -   1 uF  
+--
+--  Error       :    [0 hz  -  80 hz]
+--
+-- Sources:
+-- 			http://ironbark.bendigo.latrobe.edu.au/~rice/lc/
+-- 			http://www.todopic.com.ar/foros/index.php?topic=26840.0
+-- 			Biblioteca binario a bcd de Vasile Surducan.
+--			Biblioteca punto flotante 32bits de Microchip AN575 adaptada por Ziya ERDEMIR. 
+--
+-- Date: Julio 2011
+--
+-- ------------------------------------------------------
+--
+
+var byte RE, R0, R1, R2, R3
+var byte CE, C0, C1, C2
+var byte LE, L0, L1, L2
+var byte KE, K0, K1, K2, K3		--backup de dato
+
+CE = 0x75     -- 0.001uF Condensador de 1nF referencia
+C0 = 0x03
+C1 = 0x12
+C2 = 0x6E
+
+LE = 0x71     -- 0.000082uH  Inductor de referencia
+L0 = 0x2B
+L1 = 0xF7
+L2 = 0x6A
+
+--
+-- Convierte un binario codificado en decimal en dos bytes codificados en ascii
+--
+procedure hex_itoa ( byte in dd, byte out a1_, byte out a2_ ) is
+    a2_ = dd & 0x0f
+    a1_ = (dd >> 4) & 0x0f
+    if a1_ > 9 then 
+        a1_ = a1_ + 55 
+    else 
+        a1_ = a1_ + 48 
+    end if
+    if a2_ > 9 then 
+        a2_ = a2_ + 55 
+    else 
+        a2_ = a2_ + 48 
+    end if
+end procedure
+
+--
+-- A=B  y  B=A
+-- Procedure útil para cálculos con punto flotante 
+procedure swaparg is
+    var byte SWAP
+
+    SWAP = BE
+    BE = AE
+    AE = SWAP
+
+    SWAP = b0
+    B0 = A0
+    A0 = SWAP
+
+    SWAP = B1
+    B1 = A1
+    A1 = SWAP
+
+    SWAP = B2
+    B2 = A2
+    A2 = SWAP
+
+    SWAP = B3
+    B3 = A3
+    A3 = SWAP
+end procedure
+
+--
+-- Envía por usb la representación ASCII de un número flotante en binario
+-- decimales: es la cantidad de dígitos decimales a enviar (la parte entera va completa)
+--
+procedure enviarbcd ( byte in entero0, byte in entero1, byte in entero2,
+					  byte in decimal0, byte in decimal1, byte in decimal2, byte in decimales ) is
+
+    var byte digitos[4]
+    var byte num_entero[8]
+    var byte num_decimal[8]
+    var byte bcd1, bcd2
+    var bit foutn
+    var byte i, j
+
+	-- Convierte la parte entera en bcd (binario codificado en decimal)
+    bin3bcd4 (digitos[0], digitos[1], digitos[2], digitos[3], entero0, entero1, entero2)
+
+	i = 0
+	j = 0
+	for 4 using i loop
+		hex_itoa (digitos[i], bcd2, bcd1)
+		num_entero[j] = bcd2
+		num_entero[j+1] = bcd1
+		j = j + 2
+	end loop
+
+	-- Convierte la parte decimal en bcd (binario codificado en decimal)	
+    bin3bcd4 (digitos[0], digitos[1], digitos[2], digitos[3], decimal0, decimal1, decimal2)
+	i = 0
+	j = 0
+	for 4 using i loop
+		hex_itoa (digitos[i], bcd2, bcd1)
+		num_decimal[j] = bcd2
+		num_decimal[j+1] = bcd1
+		j = j + 2
+	end loop
+	
+	-- Envía la parte entera
+	i = 0
+	foutn = 0
+	for 8 using i loop
+		if (foutn) | (num_entero[i] != "0") | (i==7) then   --descarta los ceros a la izquierda en numero entero
+			foutn = 1
+        	usb_serial_data =  num_entero[i]
+        end if
+    end loop
+
+	-- Envía la parte decimal
+	if (decimales > 0) then
+		usb_serial_data = "."
+		i = 0
+		for 8 using i loop
+			if (i+1 <= decimales) then						--selecciona los n decimales de parámetro
+	        	usb_serial_data =  num_decimal[i]
+	        end if
+	    end loop
+	end if	
+
+end procedure
+
+--
+-- Realiza la medición de frecuencia
+--
+procedure medirfrecuencia() is
+	INTCON = 0
+
+    overflow = 0
+    timeflag = 0
+
+    timer0_isr_initcounter()
+    timer1_isr_init()
+
+	medicion_direction = input		-- habilito T0CKI
+	delay_1ms(100)
+
+    T0CON_TMR0ON = on				-- habilita el timer0
+    T1CON_TMR1ON = on				-- habilita el timer1
+	PIE1_TMR1IE = on				-- habilita interrupción por overflow de timer1
+
+	INTCON = INTCON | 0xF0			-- habilita interrupciones
+	
+    while (timeflag == 0) loop end loop
+
+	-- Calcula la frecuencia (en Hz)
+    frecuencia = dword(overflow) * dword(65536)
+    frecuencia = frecuencia + medida
+	frecuencia = frecuencia * dword(5)
+
+	medicion_direction = output		-- deshabilito T0CKI
+
+	INTCON = 0						-- deshabilita interrupciones
+    
+end procedure
+
+--
+--Ver cálculos en:
+;@file:lcmeter/doc/calculos-lc-meter.ods
+--
+procedure calcular() is
+
+    A0 = byte(frecuencia >> 16)
+    A1 = byte(frecuencia >> 8)
+    A2 = byte(frecuencia)
+
+    mfp32_flo2432()                                  -- F = float(frecuencia)
+   
+    BE = 0x88
+    B0 = 0x7A
+    B1 = 0x00
+    B2 = 0x00
+    mfp32_fpd()                                     -- F = F/1000 convierte la frecuencia a kHz.
+
+    BE = AE
+    B0 = A0 
+    B1 = A1
+    B2 = A2
+    mfp32_fpm()                                     -- F = F * F
+    RE = AE
+    R0 = A0
+    R1 = A1
+    R2 = A2
+
+    AE = 0x79
+    A0 = 0x4f
+    A1 = 0x81
+    A2 = 0x7a                                       -- 0.025330295910584  = 1/(2*pi)^2
+
+    if modo == MODO_INDUCTOR | modo == MODO_CALIBRACION then
+        BE = CE
+        B0 = C0
+        B1 = C1
+        B2 = C2
+    else
+        BE = LE 
+        B0 = L0 
+        B1 = L1 
+        B2 = L2
+    end if
+    mfp32_fpd()                                     -- 1/((2*pi)^2*L1)     o  1/((2*pi)^2*C1)
+
+    BE = RE 
+    B0 = R0 
+    B1 = R1 
+    B2 = R2
+    mfp32_fpd()                                     -- 1/((2*pi)^2*L1*F^2) o  1/((2*pi)^2*C1*F^2)
+
+    if modo == MODO_INDUCTOR | modo == MODO_CALIBRACION then
+        BE = LE 
+        B0 = L0 
+        B1 = L1 
+        B2 = L2
+    else
+        BE = CE 
+        B0 = C0
+        B1 = C1 
+        B2 = C2
+    end if
+    mfp32_fps()                                     -- 1/((2*pi)^2*L1*F^2) - C1   o   1/((2*pi)^2*C1*F^2) - L1
+
+    if modo == MODO_INDUCTOR then
+        BE = 0x88
+        B0 = 0x7A 
+        B1 = 0x00 
+        B2 = 0x00                                   -- Resultado = Resultado * 1000
+        mfp32_fpm()
+    end if
+    
+    -- El resultado del calculo (Cx o Lx) queda en A.
+end procedure
+
+-- calibración:
+-- En modo condensador, se pulsa el botón calibrar(rojo) sin componentes conectados
+-- En modo inductor, se une la salida con un cable y se pulsa el botón calibrar(rojo).
+procedure calibrar() is
+    var byte viejomodo
+
+    led1 = off
+    viejomodo = modo
+    modo = MODO_CALIBRACION
+    delay_100ms(20)
+
+    LE = 0x71										-- 0.000082uH  Inductor de referencia
+    L0 = 0x2B
+    L1 = 0xF7
+    L2 = 0x6A
+        
+    calcular()
+
+    swaparg()										-- B = A  y A = B
+    
+    AE = 0x71										-- valor inductancia estandar
+    A0 = 0x2B
+    A1 = 0xF7
+    A2 = 0x6A
+    mfp32_fpa()										-- A = A + B
+    
+    LE = AE											-- L = A
+    L0 = A0        
+    L1 = A1         
+    L2 = A2
+    
+    -- Guarda el valor ajustado en la eeprom
+    data_eeprom_write(EEPROM_ADDR_LAJUSTADA, LE)
+    data_eeprom_write(EEPROM_ADDR_LAJUSTADA+1, L0)
+    data_eeprom_write(EEPROM_ADDR_LAJUSTADA+2, L1)
+    data_eeprom_write(EEPROM_ADDR_LAJUSTADA+3, L2)
+    
+    modo = viejomodo
+    led1 = on
+end procedure
+
+--
+-- Ajusta el valor del componente L o C a la mejor escala posible. 
+--
+procedure fijarescala() is
+	pragma inline
+	
+	KE=AE  K0=A0  K1=A1  K2=A2  K3=A3
+
+	if modo == MODO_INDUCTOR then
+		valuescale[1] = "H"
+	else
+		valuescale[1] = "F"
+	end if
+	
+	BE = 0x92								-- B=1000000
+	B0 = 0x74
+	B1 = 0x24
+	B2 = 0x00	
+	
+    mfp32_fpm()								-- A = A * B
+	RE=AE  R0=A0 R1=A1  R2=A2  R3=A3
+    
+	BE = 0x88								-- B=999
+	B0 = 0x79
+	B1 = 0xC0
+	B2 = 0x00
+	
+	mfp32_fps()								-- A = A-B
+	
+    if (A0 & 0x80) != 0 then				-- A<B ?
+		AE=RE  A0=R0 A1=R1  A2=R2  A3=R3
+    	if modo == MODO_INDUCTOR then
+    		valuescale[0] = "n"
+    	else
+    		valuescale[0] = "p"
+    	end if    	
+    else
+		AE=KE  A0=K0  A1=K1  A2=K2  A3=K3
+		
+		BE = 0x88							-- B=1000
+		B0 = 0x7A
+		B1 = 0x00
+		B2 = 0x00	
+
+	    mfp32_fpm()							-- A = A * B
+		RE=AE  R0=A0 R1=A1  R2=A2  R3=A3
+	    
+		BE = 0x88							-- B=999
+		B0 = 0x79
+		B1 = 0xC0
+		B2 = 0x00
+
+		mfp32_fps()							-- A = A-B
+		
+	    if (A0 & 0x80) != 0 then			-- A<B ?
+	    	if modo == MODO_INDUCTOR then
+	    		valuescale[0] = "u"
+	    	else
+	    		valuescale[0] = "n"
+	    	end if    	
+	    else
+	    	if modo == MODO_INDUCTOR then
+	    		valuescale[0] = "m"
+	    	else
+	    		valuescale[0] = "u"
+	    	end if  
+	    end if	     	
+		AE=RE  A0=R0 A1=R1  A2=R2  A3=R3
+	end if
+	
+end procedure
+
+--
+-- Calcula y envía por usb el valor del condensador/inductor 
+--
+procedure enviar_medicion() is
+    calcular()
+
+    if (A0 & 0x80) != 0 then   -- descarta Lx o Cx negativo
+        AE = 0
+        A0 = 0
+        A1 = 0
+        A2 = 0
+    end if
+
+	fijarescala()
+
+    BE = AE				-- B = A  Donde A es el Lx o Cx
+    B0 = A0 
+    B1 = A1 
+    B2 = A2
+    mfp32_int3232()		-- A = INT(A)
+    R0 = A0				-- R = A
+    R1 = A1				-- Obtiene la parte entera del número y la guarda en R
+    R2 = A2
+    R3 = A3
+
+    mfp32_flo3232()		-- A = INT(A)
+						-- Convierte la parte entera en un número punto flotante
+
+    swaparg				-- intercambia Ax <-> Bx
+
+    mfp32_fps()			-- A = A-B , Dado que B contiene la parte entera
+						-- A queda con la parte decimal
+
+    BE = 0x92			-- B = 1000000
+    B0 = 0x74 
+    B1 = 0x24 
+    B2 = 0x00
+    mfp32_fpm()			-- A = A * 1000000
+    mfp32_int3232()		-- A = Int(A)
+						-- A contiene la parte decimal como un número entero.
+
+	if (modo == MODO_INDUCTOR) & (valuescale[0] == "n") then
+		enviarbcd (R1, R2, R3, A1, A2, A3, 0)
+	else
+		if (modo == MODO_CONDENSADOR) & (valuescale[0] == "p") then
+			enviarbcd (R1, R2, R3, A1, A2, A3, 0)
+		else
+			enviarbcd (R1, R2, R3, A1, A2, A3, 3)
+		end if
+	end if    	
+
+end procedure
+

@@ -1,0 +1,67 @@
+-- ------------------------------------------------------
+-- Title: USB LC Meter v1.0
+--
+-- Author: Felixls - 2011
+--
+-- Web: http://sergiols.blogspot.com
+--
+-- Compiler: 2.4o
+--
+-- Licence: Todos los contenidos por Felixls son licenciados por 
+--          Creative Commons Reconocimiento-Compartir bajo la misma licencia 3.0 Unported License.
+--          http://creativecommons.org/licenses/by-sa/3.0/
+--
+-- Description:
+-- Inductómetro/Capacímetro USB de alta precisión
+--
+-- Range:
+--
+--  Frecuencia  : 16000 khz - 555793 khz
+--  Inductancia : 	  1 nH  - 100 mH
+--  Capacitancia: 	  1 pF  -   1 uF  
+--
+--  Error       :    [0 hz  -  80 hz]
+--
+-- Sources:
+-- 			http://ironbark.bendigo.latrobe.edu.au/~rice/lc/
+-- 			http://www.todopic.com.ar/foros/index.php?topic=26840.0
+-- 			Biblioteca binario a bcd de Vasile Surducan.
+--			Biblioteca punto flotante 32bits de Microchip AN575 adaptada por Ziya ERDEMIR. 
+--
+-- Date: Julio 2011
+--
+-- ------------------------------------------------------
+--
+
+procedure timer1_isr_init() is
+	T1CON_TMR1ON = off        -- deshabilita el timer1
+	
+	PIR1_TMR1IF = off       	-- borra bandera de interrupción
+	IPR1_TMR1IP = on			-- interrupción de alta prioridad
+	               
+	--//Timer1 Registers Prescaler= 8 - TMR1 Preset = 3036 - Freq = 10.00 Hz - Period = 0.100000 seconds
+	T1CON_T1OSCEN = 1;		// bit 3 Timer1 Oscillator Enable Control bit 1 = on
+	T1CON_T1CKPS = 0x03;  	// bits 5-4  Prescaler Rate Select bits
+	T1CON_NT1SYNC = 1;		// bit 2 Timer1 External Clock Input Synchronization Control bit...1 = Do not synchronize external clock input
+	T1CON_TMR1CS = 0;		// bit 1 Timer1 Clock Source Select bit...0 = Internal clock (FOSC/4)
+
+	TMR1H = 11				-- Timer de 100ms
+	TMR1L =220
+    
+end procedure
+
+procedure isr_timer1() is
+	pragma interrupt
+  
+	if PIR1_TMR1IF == true then   -- overflow timer1 -> pasaron 100ms
+			
+	    T0CON_TMR0ON = off
+		medida = dword(TMR0) + dword(TMR0H) * dword(256)	-- calcula la cantidad de 
+	    T1CON_TMR1ON = off
+		
+		timeflag = on			
+		
+		PIR1_TMR1IF = off
+   end if
+
+end procedure

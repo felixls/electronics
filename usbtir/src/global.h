@@ -1,0 +1,378 @@
+#ifndef GLOBAL_H
+#define GLOBAL_H
+
+#include <stdint.h>
+
+#define IRDEBUG_LEVEL 0
+
+#define ABS(x)	((x) < 0 ? -(x) : (x))
+
+//     RESET (SPI) PC6-+-----+-PC5  LED Cable
+//     RS232 RXD   PD0-|  A  |-PC4  Led Game
+//     RS232 TXD   PD1-|  T  |-PC3  Led PCRemote
+//        USB D+   PD2-|  m  |-PC2  Led Onkyo
+// IR sensor Int1  PD3-|  e  |-PC1  Pulsador cambio protocolo
+//        USB D-   PD4-|  g  |-PC0  Pulsador cambio modo
+//                 VCC-|  a  |-GND
+//                 GND-|     |-AREF
+//          XTAL  OSC1-|  8  |-AVCC
+//          XTAL  OSC2-|     |-PB5  SCK (SPI)
+//             NC  PD5-|     |-PB4  MISO (SPI)
+//             NC  PD6-|     |-PB3  LED IROUT / MOSI (SPI)
+//             NC  PD7-|     |-PB2  NC
+//     Led IR Rec  PB0-+-----+-PB1  NC
+
+#define IROUT				PB3
+
+#define LED_IR_RECEIVED		PB0
+#define LED_CABLE			PC5
+#define LED_GAME			PC4
+#define LED_PCREMOTE		PC3
+#define LED_ONKYO			PC2
+
+#define RAWBUF 128 // buffer de anchos de pulsos (datos planos)
+
+// defines for setting and clearing register bits
+#ifndef cbi
+#define cbi(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
+#endif
+#ifndef sbi
+#define sbi(sfr, bit) (_SFR_BYTE(sfr) |= _BV(bit))
+#endif
+
+// Some macros that make the code more readable
+#define output_low(sfr, bit) 	(_SFR_BYTE(sfr) &= ~_BV(bit))
+#define output_high(sfr, bit)	(_SFR_BYTE(sfr) |= _BV(bit))
+#define output_toggle(sfr, bit)	(_SFR_BYTE(sfr) ^= _BV(bit))
+#define set_input(sfr, bit)		(_SFR_BYTE(sfr) &= ~_BV(bit))
+#define set_output(sfr, bit)	(_SFR_BYTE(sfr) |= _BV(bit))
+
+#define MAX_BITS 			32
+
+// pulse parameters in 4usec per tick
+#define PCREMOTE_BIT_MARK	60
+#define PCREMOTE_ONE_SPACE	330
+#define PCREMOTE_ZERO_SPACE	130
+#define PCREMOTE_BITS 		16
+
+#define PHILIPS_BIT_MARK	150
+#define PHILIPS_ONE_SPACE	350
+#define PHILIPS_ZERO_SPACE	180
+#define PHILIPS_BITS 		14
+
+#define ONKYO_BIT_MARK		120
+#define ONKYO_ONE_SPACE		290
+#define ONKYO_ZERO_SPACE	80
+#define ONKYO_HEADER_SPACE	800
+#define ONKYO_HEADER_MARK	1700
+#define ONKYO_BITS 			32
+
+#define CABLE_BIT_MARK		120
+#define CABLE_ONE_SPACE		810
+#define CABLE_ZERO_SPACE	390
+#define CABLE_HEADER_MARK	1687
+#define CABLE_BITS 			17
+
+#define LG_BIT_MARK			120
+#define LG_ONE_SPACE		290
+#define LG_ZERO_SPACE		80
+#define LG_HEADER_SPACE		800
+#define LG_HEADER_MARK		1700
+#define LG_BITS 			32
+
+#define XBOX_BIT_MARK		84
+#define XBOX_TBIT_MARK		168
+#define XBOX_HEADER_SPACE	168
+#define XBOX_HEADER_MARK	503
+#define XBOX_SIGNAL_FREE	620
+#define XBOX_BITS 			32
+
+#define MAXPROTO 			6
+#define IR_PROTO_PCREMOTE	0
+#define IR_PROTO_PHILIPS	1
+#define IR_PROTO_ONKYO		2
+#define IR_PROTO_CABLE		3
+#define IR_PROTO_LG			4
+#define IR_PROTO_XBOX		5
+
+#define ERR 				0
+#define DECODED 			1
+
+// receiver states
+#define STATE_IDLE			1
+#define STATE_HEADER		2
+#define STATE_MARK			3
+#define STATE_SPACE			4
+
+#define MODE_NORMAL			0
+#define MODE_DUMP			1
+
+#define BTNREMOTE_POWER 		58084
+#define BTNREMOTE_EMAIL 		57956
+#define BTNREMOTE_WWW			58020
+#define BTNREMOTE_CLOSE			57892
+#define BTNREMOTE_MUSIC			58052
+#define BTNREMOTE_MOVIES		57924
+#define BTNREMOTE_PHOTOS		57988
+#define BTNREMOTE_TV			57860
+#define BTNREMOTE_PREVTRACK		57912
+#define BTNREMOTE_PLAY			58008
+#define BTNREMOTE_NEXTTRACK		57896
+#define BTNREMOTE_REWIND		58040
+#define BTNREMOTE_STOP			57992
+#define BTNREMOTE_FORWARD		58024
+#define BTNREMOTE_VOLPLUS		58016
+#define BTNREMOTE_VOLMINUS		57936
+#define BTNREMOTE_FULLSCR		57944
+#define BTNREMOTE_PAGEPLUS		57856
+#define BTNREMOTE_PAGEMINUS 	57952
+#define BTNREMOTE_MUTE			57928
+#define BTNREMOTE_MYPC			58096
+#define BTNREMOTE_BACKSPACE		58048
+#define BTNREMOTE_TAB			58072
+#define BTNREMOTE_ARROWUP		58056
+#define BTNREMOTE_WINKEY		58064
+#define BTNREMOTE_ARROWLEFT		57880
+#define BTNREMOTE_ENTER			57864
+#define BTNREMOTE_ARROWRIGHT 	57872
+#define BTNREMOTE_FOLDERS		57976
+#define BTNREMOTE_ARROWDOWN		57960
+#define BTNREMOTE_ESC			57968
+#define BTNREMOTE_NUMLOCK		58104
+#define BTNREMOTE_ALTTAB		58088
+#define BTNREMOTE_DESKTOP		58080
+#define BTNREMOTE_MOUSEUP		57984
+#define BTNREMOTE_MOUSEDOWN		57920
+#define BTNREMOTE_MOUSELEFT		58032
+#define BTNREMOTE_MOUSERIGHT	57904
+#define BTNREMOTE_MOUSEUPRIGHT	57905
+#define BTNREMOTE_MOUSEDNRIGHT	57907
+#define BTNREMOTE_MOUSEUPLEFT	58033
+#define BTNREMOTE_MOUSEDNLEFT	58035
+#define BTNREMOTE_MOUSECLICK	58000
+#define BTNREMOTE_MOUSERIGHTCLK	57888
+#define BTNREMOTE_MOUSEDRAG		58004
+
+#define ONKYO_VOLPLUS			0b01001011101101100100000010111111
+#define ONKYO_VOLMINUS			0b01001011101101101100000000111111
+#define ONKYO_CBLSAT			0b01001011101101100111000010001111
+#define ONKYO_RADIO				0b01001011101101101101000000101111
+#define ONKYO_BDDVD				0b01001011001101100011000111001110
+#define ONKYO_GAME				0b01001011101101101011000001001111
+#define ONKYO_POWER				0b01001011001101101101001100101100
+#define ONKYO_ARROWUP			0b01001011101101100100000110111110
+#define ONKYO_ARROWDOWN			0b01001011101101101100000100111110
+#define ONKYO_ARROWRIGHT		0b01001011101101101010000101011110
+#define ONKYO_ARROWLEFT			0b01001011101101100010000111011110
+#define ONKYO_ENTER				0b01001011101101101110100100010110
+#define ONKYO_SETUP				0b01001011101101101110100100010110
+#define ONKYO_AUDIO				0b01001011001101100010101111010100
+#define ONKYO_RETURN			0b01001011001101100010101011010101
+#define ONKYO_AUDIOMOVIETV		0b01001011001101010000101111110100
+#define ONKYO_AUIDOMUSIC		0b01001011001101011000101101110100
+#define ONKYO_AUDIOGAME			0b01001011001101010100101110110100
+#define ONKYO_AUDIOSTEREO		0b01001011001101100011001011001101
+#define ONKYO_MUTE				0b01001011101101101010000001011111
+
+#define CABLE_POWER				0b10101000000000110
+#define CABLE_CHANNELMINUS		0b10011000000000010
+#define CABLE_CHANNELPLUS		0b11101000000001010
+#define CABLE_ARROWUP			0b10010110000001001
+#define CABLE_ARROWDOWN			0b11010110000000001
+#define CABLE_ARROWRIGHT		0b11110110000000110
+#define CABLE_ARROWLEFT			0b10110110000001110
+#define CABLE_GUIDE				0b10000110000001011
+#define CABLE_SELECT			0b11000100000000111
+#define CABLE_INFO				0b11100110000000101
+#define CABLE_SETTINGS			0b11001100000000110
+#define CABLE_PAGEUP			0b10101110000001100
+#define CABLE_PAGEDOWN			0b11101110000000100
+#define CABLE_SPECIAL_A			0b11110100000000001
+#define CABLE_SPECIAL_B			0b11110100000000001
+#define CABLE_SPECIAL_C			0b11110100000000001
+#define CABLE_LAST				0b11100100000000011
+#define CABLE_LIST				0b11011110000000000
+#define CABLE_LIVE				0b10111110000001111
+#define CABLE_RECORD			0b11000110000000011
+#define CABLE_PLAY				0b11101100000000010
+#define CABLE_FORWARD			0b11011100000000100
+#define CABLE_REWIND			0b10111100000001000
+#define CABLE_PAUSE				0b11111100000000000
+#define CABLE_STOP				0b10011100000001100
+#define CABLE_ONE				0b11000000000001111
+#define CABLE_TWO				0b10100000000000111
+#define CABLE_THREE				0b11100000000001011
+#define CABLE_FOUR				0b10010000000000011
+#define CABLE_FIVE				0b11010000000001101
+#define CABLE_SIX				0b10110000000000101
+#define CABLE_SEVEN				0b11110000000001001
+#define CABLE_EIGHT				0b10001000000000001
+#define CABLE_NINE				0b11001000000001110
+#define CABLE_ZERO				0b10000000000000000
+#define CABLE_EXIT				0b10100100000001011
+
+#define PHILIPS_CHANNELPLUS		0b00000100000
+#define PHILIPS_CHANNELMINUS	0b00000100001
+#define PHILIPS_VOLPLUS			0b00000010000
+#define PHILIPS_VOLMINUS		0b00000010001
+#define PHILIPS_MUTE			0b00000001101
+#define PHILIPS_PREVCHANNEL		0b00000100010
+#define PHILIPS_ONE				0b00000000001
+#define PHILIPS_TWO				0b00000000010
+#define PHILIPS_THREE			0b00000000011
+#define PHILIPS_FOUR			0b00000000100
+#define PHILIPS_FIVE			0b00000000101
+#define PHILIPS_SIX				0b00000000110
+#define PHILIPS_SEVEN			0b00000000111
+#define PHILIPS_EIGHT			0b00000001000
+#define PHILIPS_NINE			0b00000001001
+#define PHILIPS_ZERO			0b00000000000
+
+#define LG_POWER				0b00100000110111110001000011101111
+
+#define XBOX_POWER				0x800f740c
+#define XBOX_OPENCLOSE			0x800f7428
+#define XBOX_FANCYBUTTON		0x800ff464
+#define XBOX_STOP				0x800ff419
+#define XBOX_PAUSE				0x800f7418
+#define XBOX_REWIND				0x800ff415
+#define XBOX_FASTFORWARD		0x800f7414
+#define XBOX_PREV				0x800ff41b
+#define XBOX_NEXT				0x800f741a
+#define XBOX_PLAY				0x800ff416
+#define XBOX_DISPLAY			0x800f744f
+#define XBOX_TITLE				0x800ff451
+#define XBOX_DVD_MENU			0x800f7424
+#define XBOX_BACK				0x800ff423
+#define XBOX_INFO				0x800f740f
+#define XBOX_UPARROW			0x800ff41e
+#define XBOX_LEFTARROW			0x800f7420
+#define XBOX_RIGHTARROW			0x800ff421
+#define XBOX_DOWNARROW			0x800f741f
+#define XBOX_OK					0x800ff422
+#define XBOX_A					0x800f7466
+#define XBOX_B					0x800ff425
+#define XBOX_Y					0x800f7426
+#define XBOX_X					0x800ff468
+#define XBOX_CHUP				0x800f7412
+#define XBOX_CHDOWN				0x800ff413
+#define XBOX_VOLDOWN			0x800ff411
+#define XBOX_VOLUP				0x800ff410
+#define XBOX_MUTE				0x800ff40e
+#define XBOX_START				0x800ff40d
+#define XBOX_ENTER				0x800ff40b
+#define XBOX_RECORD				0x800f7417
+#define XBOX_CLEAR				0x800ff40a
+#define XBOX_0					0x800f7400
+#define XBOX_1					0x800f7401
+#define XBOX_2					0x800ff402
+#define XBOX_3					0x800f7403
+#define XBOX_4					0x800ff404
+#define XBOX_5					0x800f7405
+#define XBOX_6					0x800ff406
+#define XBOX_7					0x800f7407
+#define XBOX_8					0x800ff408
+#define XBOX_9					0x800f7409
+#define XBOX_100				0x800ff41d
+#define XBOX_RELOAD				0x800f741c
+
+
+#define MOUSE_MOVE_INC			10		// cant. de pixeles a incrementar por movimiento de mouse
+
+#define HIDMOD_CONTROL_LEFT    (1<<0)
+#define HIDMOD_SHIFT_LEFT      (1<<1)
+#define HIDMOD_ALT_LEFT        (1<<2)
+#define HIDMOD_GUI_LEFT        (1<<3)
+#define HIDMOD_CONTROL_RIGHT   (1<<4)
+#define HIDMOD_SHIFT_RIGHT     (1<<5)
+#define HIDMOD_ALT_RIGHT       (1<<6)
+#define HIDMOD_GUI_RIGHT       (1<<7)
+
+#define HIDKEY_A       			4
+#define HIDKEY_B       			5
+#define HIDKEY_C       			6
+#define HIDKEY_D       			7
+#define HIDKEY_E       			8
+#define HIDKEY_F       			9
+#define HIDKEY_G       			10
+#define HIDKEY_H       			11
+#define HIDKEY_I       			12
+#define HIDKEY_J       			13
+#define HIDKEY_K       			14
+#define HIDKEY_L       			15
+#define HIDKEY_M       			16
+#define HIDKEY_N       			17
+#define HIDKEY_O       			18
+#define HIDKEY_P       			19
+#define HIDKEY_Q       			20
+#define HIDKEY_R       			21
+#define HIDKEY_S       			22
+#define HIDKEY_T       			23
+#define HIDKEY_U       			24
+#define HIDKEY_V       			25
+#define HIDKEY_W       			26
+#define HIDKEY_X       			27
+#define HIDKEY_Y       			28
+#define HIDKEY_Z       			29
+
+#define HIDKEY_1       			30
+#define HIDKEY_2       			31
+#define HIDKEY_3       			32
+#define HIDKEY_4       			33
+#define HIDKEY_5       			34
+#define HIDKEY_6       			35
+#define HIDKEY_7       			36
+#define HIDKEY_8       			37
+#define HIDKEY_9       			38
+#define HIDKEY_0       			39
+
+#define HIDKEY_ENTER			0x28
+#define HIDKEY_ESC				0x29
+#define HIDKEY_BACKSPACE		0x2a
+#define HIDKEY_TAB				0x2b
+#define HIDKEY_SPACEBAR			0x2c
+
+#define HIDKEY_F1      			58
+#define HIDKEY_F2      			59
+#define HIDKEY_F3      			60
+#define HIDKEY_F4      			61
+#define HIDKEY_F5      			62
+#define HIDKEY_F6      			63
+#define HIDKEY_F7      			64
+#define HIDKEY_F8      			65
+#define HIDKEY_F9      			66
+#define HIDKEY_F10     			67
+#define HIDKEY_F11     			68
+#define HIDKEY_F12     			69
+
+#define HIDKEY_PRINTSCREEN		0x46
+#define HIDKEY_SCROLLLOCK		0x47
+#define HIDKEY_PAUSE			0x48
+#define HIDKEY_INSERT			0x49
+#define HIDKEY_HOME				0x4a
+#define HIDKEY_PAGEUP			0x4b
+#define HIDKEY_DELETEFORWARD	0x4c
+#define HIDKEY_END				0x4d
+#define HIDKEY_PAGEMINUS		0x4e
+#define HIDKEY_ARROWRIGHT		0x4f
+#define HIDKEY_ARROWLEFT		0x50
+#define HIDKEY_ARROWDOWN		0x51
+#define HIDKEY_ARROWUP			0x52
+
+#define TOP_UINT16				0b1000000000000000
+#define TOP_UINT32				0b10000000000000000000000000000000
+
+typedef enum
+{
+	MODE_PLAY = 0,
+	MODE_RECORD = 1,
+} system_mode_t;
+
+typedef struct
+{
+	system_mode_t mode;
+} global_t;
+
+extern global_t global;
+
+#endif

@@ -1,0 +1,617 @@
+-- ------------------------------------------------------
+-- Title: Reloj amanecer
+--
+-- Author: Felixls - 2011  
+--
+-- Compiler: 2.4o
+--
+-- Description: Reloj despertador con luz y sonido.
+--
+-- Notes:
+--  - File creation date/time: Thu Aug 04 23:07:26 ART 2011.
+-- ------------------------------------------------------
+
+;@file: datasheets/otros/DS1307.pdf
+;@file: datasheets/otros/DS1669.pdf
+;@file: datasheets/40044G.pdf
+
+--;@main
+include 16f628a                    -- target PICmicro
+
+-- Resonator or crystal connected to pins OSC1 and OSC2.
+pragma target clock 4_000_000     -- oscillator frequency
+
+-- configuration memory settings (fuses)
+pragma target OSC  INTOSC_NOCLKOUT -- uso de oscilador interno
+pragma target WDT  disabled        -- no watchdog
+pragma target LVP  disabled        -- no Low Voltage Programming
+pragma target MCLR internal
+pragma target PWRTE enabled
+
+PCON_OSCF = 1						-- oscilador interno a 4Mhz
+
+--Bibliotecas necesarias
+include delay
+include print
+
+enable_digital_io()					-- make all pins digital I/O
+
+delay_1ms(200)						-- retardo estabilización de tensión
+
+PORTB					= 0b0000_0100
+PORTA					= 0b0000_0000
+
+PORTA_direction 		= 0b0011_1111
+PORTB_direction 		= 0b0000_0001
+delay_1ms(200)						-- retardo establecimiento de dirección de puertos.
+PORTB					= 0b0000_0100
+PORTA					= 0b0000_0000
+delay_1ms(200)
+
+const pwmdutty100p		= 0b00111110
+
+const modoaudio_play	= high
+const modoaudio_rec		= low
+
+alias   volmas			is pin_A7
+alias   volmenos		is pin_A6
+alias   strobe			is pin_A5
+
+alias   lampara			is pin_B4
+alias   modoaudio		is pin_B2
+alias   playrec			is pin_B1
+alias   crucexcero		is pin_B0
+
+alias	lcd_en			is	pin_B5
+alias	lcd_data		is	pin_B7 
+alias	lcd_clock		is	pin_B6
+
+alias	boton_menu		is	pin_A2
+alias	boton_mas		is	pin_A3
+alias	boton_menos		is	pin_A4
+
+const byte LCD_ROWS		=  2           -- LCD with 2 lines
+const byte LCD_CHARS	=  16          -- and 16 characters per line
+include lcd_hd44780_3wires
+
+const byte wellcome1[LCD_CHARS] = " Reloj amanecer "
+const byte wellcome2[LCD_CHARS] = " Felixls - 2011 "
+const byte strhora[]			= "Hora:"
+const byte strhoras[]			= "horas"
+const byte strmin[]				= "minutos"
+const byte strseg[]				= "segundos"
+const byte stralarma[]			= "Alarma:"
+const byte strfecha[]			= "Fecha:"     
+const byte stranio[]			= "año"
+const byte strmes[]				= "mes"
+const byte strdia[]				= "dia"
+const byte strready[]			= "Listo."
+const byte dia[]				= "DomLunMarMieJueVieSab"
+const byte space[]				= " "
+const byte sep[]				= ":"
+const byte sepdate[]			= "/"
+
+-- i2c config
+alias i2c_scl            		is pin_a0
+alias i2c_scl_direction  		is pin_a0_direction
+alias i2c_sda            		is pin_a1
+alias i2c_sda_direction  		is pin_a1_direction
+
+const word _i2c_bus_speed 		= 1 ; * 100kHz
+const bit _i2c_level			= true   ; i2c levels (not SMB)
+
+-- 16f628A no tiene i2c por hardware, entonces...
+include i2c_software
+i2c_initialize()
+
+-- iniciar el reloj
+include rtc_ds1307
+ds1307_init()
+
+record relojrec is
+	byte y, mth, d
+	byte w, h , m , s
+end record
+
+record alarmarec is
+	byte h , m , s
+end record
+
+var relojrec reloj
+var alarmarec alarma
+
+modoaudio = modoaudio_play
+
+const retardomax = 250
+
+var byte	counter = 0
+var byte	retardo = retardomax
+var byte	tmr0load
+var byte	seganterior = 0
+var byte	seganteriorbl = 0
+var byte	cuentaseg = 0
+var bit		alarma_encendida = 0
+var bit		busy = 0
+var byte	i = 0
+var byte	backlightcounter = 0
+
+procedure lamparaonoff() is
+	if (retardo == retardomax) then
+		delay_1ms(20)
+		INTCON_GIE = off
+		lampara = off
+	else
+		INTCON_GIE = on			
+	end if			
+end procedure
+
+-- baja el volumen a 0 manteniendo durante 10 segundos volmenos en alto
+procedure bajarvolumen() is
+	volmenos = on
+	for 100 loop
+		delay_1ms(100)
+	end loop
+	volmenos = off
+end procedure
+
+procedure clearscreen() is
+	lcd_clear_screen()
+	delay_1ms(20)
+end procedure
+
+-- formatea un valor byte con cero a la izquierda
+procedure lcdnumber'put(byte in valor) is
+   var byte D10
+   var byte VV
+   D10 = valor / 10
+   VV = valor % 10
+
+   -- always display Zeroes
+   lcd = "0" + D10
+   lcd = "0" + VV
+end procedure
+
+-- aumenta o reduce el valor de una variable de acuerdo a los botones +/-
+procedure boton_masmenos(byte in out variable) is
+	if boton_mas == on then
+		delay_1ms(50) 
+		while boton_mas == on loop end loop
+		variable = variable + 1
+	end if	
+	
+	if boton_menos == on then 
+		delay_1ms(50) 
+		while boton_menos == on loop end loop
+		variable = variable - 1
+	end if
+	
+end procedure
+
+-- configura el día, mes y año actual
+procedure configdate(byte in out y, byte in out mth, byte in out d) is
+
+	clearscreen()
+
+	lcd_cursor_position( 0,0 )
+	print_string(lcd, strfecha)						-- "Fecha:"
+	
+	lcd_cursor_position(1, 0)
+	print_string(lcd, stranio)
+	while boton_menu == off loop
+	   
+	   boton_masmenos(y)
+	   
+	   if y == 100 then y = 0 end if
+	   if y == 255 then y = 99 end if
+	   
+	   lcd_cursor_position(1, 9)
+	   lcdnumber = y
+	end loop
+	delay_1ms(50)
+	
+	while boton_menu == on loop end loop
+	
+	lcd_cursor_position(1, 0)
+	print_string(lcd, strmes)
+	while boton_menu == off loop
+	   
+	   boton_masmenos(mth)
+	   
+	   if mth == 13 then mth = 1 end if
+	   if mth == 255 then mth = 12 end if
+	   
+	   lcd_cursor_position(1, 9)
+	   lcdnumber = mth
+	end loop
+	delay_1ms(50)
+
+	while boton_menu == on loop end loop
+	
+	lcd_cursor_position(1, 0)
+	print_string(lcd, strdia)
+	while boton_menu == off loop
+	
+	   boton_masmenos(d)
+	   
+	   if d == 32 then d = 0 end if
+	   if d == 255 then d = 31 end if
+	   
+	   lcd_cursor_position(1, 9)
+	   lcdnumber = d
+	end loop
+	delay_1ms(50)
+	
+	while boton_menu == on loop end loop
+	
+end procedure
+
+-- Configura hora, minuto y segundos de alarma u hora actual
+procedure configtime(byte in modo, byte in out h, byte in out m, byte in out s) is
+
+	clearscreen()
+	
+	lcd_cursor_position( 0,0 )
+	if (modo == 0) then
+		print_string(lcd, strhora)						-- "Hora:"
+	else
+		print_string(lcd, stralarma)					-- "Alarma:"
+	end if
+	
+	lcd_cursor_position(1, 0)
+	print_string(lcd, strhoras)
+	while boton_menu == off loop
+	   
+	   boton_masmenos(h)
+	   
+	   if h == 24 then h = 0 end if
+	   if h == 255 then h = 23 end if
+	   
+	   lcd_cursor_position(1, 9)
+	   lcdnumber = h
+	end loop
+	delay_1ms(50)
+	
+	while boton_menu == on loop end loop
+	
+	lcd_cursor_position(1, 0)
+	print_string(lcd, strmin)
+	while boton_menu == off loop
+	   
+	   boton_masmenos(m)
+	   
+	   if m == 60 then m = 0 end if
+	   if m == 255 then m = 59 end if
+	   
+	   lcd_cursor_position(1, 9)
+	   lcdnumber = m
+	end loop
+	delay_1ms(50)
+	
+	while boton_menu == on loop end loop
+
+	lcd_cursor_position(1, 0)
+	print_string(lcd, strseg)
+	while boton_menu == off loop
+	
+	   boton_masmenos(s)
+	   
+	   if s == 60 then s = 0 end if
+	   if s == 255 then s = 59 end if
+	   
+	   lcd_cursor_position(1, 9)
+	   lcdnumber = s
+	end loop
+	delay_1ms(50)
+	
+	while boton_menu == on loop end loop
+	
+end procedure
+
+-- interrupción que se encarga de la función dimmer
+procedure isr() is
+	pragma interrupt
+		
+	if (INTCON_INTF) then
+		lampara = off
+		counter = 0
+		TMR0 = tmr0load
+		INTCON_T0IF = 0
+		INTCON_INTF = 0
+		INTCON_T0IE = on
+	end if
+	
+	if (INTCON_T0IF) then
+		TMR0 = tmr0load		
+		counter = counter + 1
+		if (counter >= retardo) then
+			lampara = on
+			INTCON_T0IE = off
+		end if
+		INTCON_T0IF = 0
+	end if
+end procedure
+
+INTCON = 0
+INTCON_RBIE = off
+INTCON_GIE = off
+
+INTCON_INTF = off
+INTCON_INTE = on
+
+-- Timer0 configurado a 0.1ms
+
+--//Timer0 Registers Prescaler= 1 - TMR0 Preset = 156 - Freq = 10000.00 Hz - Period = 0.000100 seconds
+T0CON_T0CS = 0;  // bit 5  TMR0 Clock Source Select bit...0 = Internal Clock (CLKO) 1 = Transition on T0CKI pin
+T0CON_T0SE = 0;  // bit 4 TMR0 Source Edge Select bit 0 = low/high 1 = high/low
+T0CON_PSA = 1;   // bit 3  Prescaler Assignment bit...0 = Prescaler is assigned to the Timer0
+T0CON_T0PS = 0;  // bits 2-0  PS2:PS0: Prescaler Rate Select bits
+
+--tmr0load = 156		--overflow timer0 cada 0.1ms
+tmr0load = 246			--overflow timer0 cada 0.01ms
+--tmr0load = 206			--overflow timer0 cada 0.05ms 
+
+INTCON_TMR0IF = 0
+INTCON_TMR0IE = off
+
+lampara = off
+
+INTCON_PEIE = on
+--INTCON_GIE = on
+
+-- Configura PWM
+PR2 = 0b00111110
+T2CON = 0b00000100
+CCPR1L = pwmdutty100p
+CCP1CON = 0b00011100
+
+--No puedo hacer esto o me quedo sin memoria!!
+---- Configure PWM 
+--pin_ccp1_direction = output
+--include pwm_hardware
+--pwm_set_frequency(16000)
+--pwm_max_resolution(1)
+--pwm1_on()
+
+-- mensaje de bienvenida...
+lcd_init()
+clearscreen()
+print_string(lcd, wellcome1)
+lcd_cursor_position(1, 0)
+print_string(lcd, wellcome2)
+
+-- pone al APR9600 en modo reproducción
+playrec = off
+i=0
+for 50 loop
+  if (strobe == 0) then
+    i = i + 1
+  end if  
+  delay_1ms(10)
+end loop
+
+if (i>0) then
+	playrec = on
+	delay_1ms(10)
+	playrec = 0	
+end if
+
+bajarvolumen()
+
+clearscreen()
+print_string(lcd, strready)
+
+if (boton_menu == on) then				-- si se pulsa menu al incio se puede configurar la fecha y hora del reloj
+
+	CCPR1L = pwmdutty100p
+
+	while boton_menu == on loop end loop
+
+	ds1307_write(0x08 , 0)	-- 0=no hay alarma establecida
+
+	reloj.y = 0 reloj.mth = 1 reloj.d = 1
+	reloj.h = 0 reloj.m = 0 reloj.s = 0
+	reloj.w = 1
+	
+	configdate(reloj.y, reloj.mth, reloj.d)
+	
+	clearscreen()
+	
+	while boton_menu == off loop
+	   
+	   boton_masmenos(reloj.w)
+	   
+	   if reloj.w == 8 then reloj.w = 1 end if
+	   if reloj.w == 255 then reloj.w = 7 end if
+	   
+	   lcd_cursor_position(1, 0)
+	   print_string(lcd, strdia )
+	   lcd_cursor_position(1, 9)
+	   
+	   lcdnumber = reloj.w
+	end loop
+    delay_1ms(100)
+	while boton_menu == on loop end loop
+	
+	configtime(0, reloj.h, reloj.m, reloj.s)
+	
+	clearscreen()
+	
+-- escribe fecha y hora en el DS1307
+	ds1307_write( 0x00 , reloj.s )
+	ds1307_write( 0x01 , reloj.m )
+    ds1307_write( 0x02 , 0 ) 	                 -- modo 24 horas
+	ds1307_write( 0x02 , reloj.h )	
+	ds1307_write( 0x03 , reloj.w )
+	ds1307_write( 0x04 , reloj.d )
+	ds1307_write( 0x05 , reloj.mth )
+	ds1307_write( 0x06 , reloj.y )
+
+	CCPR1L = 0
+end if
+
+-- si se pulsa + y - al incio se pone al APR9600 en modo grabación y permite grabar un nuevo sonido en su memoria.
+if (boton_menu == off & boton_mas == on & boton_menos == on) then
+	modoaudio = modoaudio_rec
+	playrec = on
+	delay_1ms(50)
+	playrec = off
+	for 40 loop
+		delay_100ms(10)
+	end loop
+	modoaudio = modoaudio_play	
+end if
+
+-- un 1 en la posición de memoria 8 del ds1307 nos indicará si se estableció la alarma.
+ds1307_read(0x08 , i)
+
+if (i==1) then
+	ds1307_read(0x09, alarma.h)			-- la alarma se guarda en la memoria volátil del ds1307
+	ds1307_read(0x0A, alarma.m)			-- que permite ilimitadas escrituras 
+	ds1307_read(0x0B, alarma.s)			-- mantenida por la celda de 3v en caso de corte de luz.
+else
+	alarma.h = 6						-- nos levantamos por default a las 6 de la matina?
+	alarma.m = 0
+	alarma.s = 0
+end if
+
+clearscreen()
+
+forever loop
+
+	ds1307_read( 0x00 , reloj.s )
+	ds1307_read( 0x01 , reloj.m )
+	ds1307_read( 0x02 , reloj.h )
+	ds1307_read( 0x03 , reloj.w )
+	ds1307_read( 0x04 , reloj.d )
+	ds1307_read( 0x05 , reloj.mth )
+	ds1307_read( 0x06 , reloj.y )
+
+	--1234567890123456
+	------------------
+	-- Mie 12/03/2011
+	--    00:00:00
+	------------------
+
+	lcd_cursor_position(0, 1)
+	i = (reloj.w - 1) * 3
+	lcd = dia[i]
+	lcd = dia[i + 1]
+	lcd = dia[i + 2]
+	lcd = space
+	lcdnumber = reloj.d
+	lcd = sepdate
+	lcdnumber = reloj.mth
+	lcd = sepdate
+	lcd = "2"
+	lcd = "0"
+	lcdnumber = reloj.y
+	
+	lcd_cursor_position(1, 3)
+	lcdnumber = reloj.h
+	lcd = sep
+	lcdnumber = reloj.m
+	lcd = sep
+	lcdnumber = reloj.s
+	if (alarma_encendida) then
+		lcd = "*"
+	else
+		lcd = space
+	end if
+		
+	if (busy == false) then  -- si no se activó aún la alarma...
+		if (alarma_encendida & reloj.h == alarma.h & reloj.m == alarma.m & reloj.s == alarma.s ) then		    
+			busy = true
+			
+			retardo = retardomax
+			seganterior = reloj.s
+			cuentaseg = 0
+						
+			INTCON_GIE = on
+		else
+			if (boton_mas) then
+				backlightcounter = 0					-- activa el backlight por 30 segundos
+				if (retardo > 11) then
+					retardo = retardo - 10
+				else
+					retardo = 1
+				end if				
+				lamparaonoff()
+			end if
+			if (boton_menos) then				
+				backlightcounter = 0
+				if (retardo < retardomax-11) then
+					retardo = retardo + 10
+				else
+					retardo = retardomax
+				end if
+				lamparaonoff()
+			end if
+			if (reloj.s != seganteriorbl) then
+				seganteriorbl = reloj.s
+				if (backlightcounter<30) then				-- a los 30 segundos el backlight se apaga
+					backlightcounter = backlightcounter + 1
+					CCPR1L = pwmdutty100p
+				else
+					CCPR1L = 0					 
+				end if
+			end if
+		end if			
+	else
+		-- la alarma está sonando, entonces incrementar la luz de la lampara, el backlight y el volumen del audio.
+		if (reloj.s != seganterior) then
+			seganterior = reloj.s
+			cuentaseg = cuentaseg + 1
+			if (reloj.s % 3 == 0) then
+				if (retardo > 2) then
+					retardo = retardo - 1
+				else
+					retardo = 1
+				end if
+			end if
+			if (cuentaseg > 40 & reloj.s % 7 == 0) then
+				cuentaseg = 40
+				playrec = on
+				volmas = on
+				delay_1ms(50)
+				volmas = off
+				if (CCPR1L < pwmdutty100p) then
+					CCPR1L = CCPR1L + 1
+				end if			
+			end if
+		end if
+		
+		if (boton_menu == on) then		-- pulsando menu se detiene la alarma.
+			busy = false
+			playrec = off			
+			CCPR1L = 0
+			retardo = retardomax
+			delay_1ms(20)
+			INTCON_GIE = off
+			lampara = off
+			bajarvolumen()
+			while (boton_menu == on) loop end loop
+		end if					
+	end if
+
+	if (boton_menu == on) then			-- pulsando menu es posible configurar o ver la alarma actual.
+		backlightcounter = 0
+		delay_1ms(50)
+		while boton_menu == on loop end loop
+		configtime(1, alarma.h, alarma.m, alarma.s)
+		ds1307_write(0x09, alarma.h)
+		ds1307_write(0x0A, alarma.m)
+		ds1307_write(0x0B, alarma.s)	
+		
+		clearscreen()
+		alarma_encendida = true
+		ds1307_write(0x08, alarma_encendida)
+	end if	
+	
+	if (boton_mas == on & boton_menos == on) then	-- pulsando simultaneamente + y - se activa/desactiva la alarma.
+		alarma_encendida = !alarma_encendida
+		ds1307_write(0x08, alarma_encendida)
+	end if			
+	
+	delay_1ms(100)
+		
+end loop
